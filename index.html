@@ -76,6 +76,7 @@ const LEARN=["English","Spanish","French","German","Italian","Portuguese","Japan
 const NATIVE=["English","Spanish","French","German","Italian","Portuguese","Russian","Kazakh","Turkish","Arabic","Hindi","Chinese (Mandarin)","Japanese","Korean","Ukrainian","Polish"];
 const QUICK=[["📚 Words","Teach me 5 new useful words."],["🗣️ Phrases","Teach me some everyday phrases."],["🎮 Game","Let’s play a fun guessing game."],["📝 Quiz","Quiz me on what I’ve learned."]];
 const app=document.getElementById("app"),nav=document.getElementById("nav");
+const AI_ENDPOINT=""; // paste your proxy URL here when hosting outside claude.ai
 let me=null,chats=[],cur=null,busy=false,sampleFn=null,reg={};
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 const opts=(a,s)=>a.map(x=>`<option${x===s?" selected":""}>${x}</option>`).join("");
@@ -231,12 +232,12 @@ async function ask(text,label){
 async function reply(){
   const bot=addMsg("bot","Thinking…");busy=true;const chat=cur;
   try{
-    if(!sampleFn)sampleFn=await claude.use("sample");
-    if(!sampleFn){bot.textContent="The assistant isn’t available right now.";chat.msgs.pop();return}
+    if(!sampleFn&&typeof claude!=="undefined")sampleFn=await claude.use("sample");
+    if(!sampleFn&&!AI_ENDPOINT){bot.textContent="The assistant isn’t connected on this site yet. Set AI_ENDPOINT in the code, or use the original claude.ai link.";chat.msgs.pop();return}
     const msgs=chat.msgs.slice(-14).map(m=>({role:m.r,content:m.c}));
     if(msgs[0].role!=="user")msgs.shift();
-    msgs[0].content="[Instructions: "+persona()+"]\n\n"+msgs[0].content;
-    const r=await sampleFn(msgs,{cache:false,onText:({text})=>{bot.textContent=text;const b=document.getElementById("msgs");b.scrollTop=b.scrollHeight}});
+    if(sampleFn)msgs[0].content="[Instructions: "+persona()+"]\n\n"+msgs[0].content;
+    let r;if(sampleFn){r=await sampleFn(msgs,{cache:false,onText:({text})=>{bot.textContent=text;const b=document.getElementById("msgs");b.scrollTop=b.scrollHeight}})}else{const res=await fetch(AI_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:persona(),messages:msgs})});const j=await res.json();if(!res.ok||!j.text)throw new Error("api");r={text:j.text}}
     bot.textContent=r.text;chat.msgs.push({r:"assistant",c:r.text});
   }catch(e){
     bot.textContent=e&&e.code==="rate_limited"?"I need a short rest – please try again in a moment!":"Oops, something went wrong. Please try again.";
